@@ -28,6 +28,7 @@ async function run() {
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
         const database = client.db("taskmanagementapp");
         const usersCollection = database.collection("users");
+        const tasksCollection = database.collection("tasks");
         app.post("/users", async (req, res) => {
             try {
                 const { uid, email, displayName } = req.body;
@@ -48,6 +49,56 @@ async function run() {
             } catch (error) {
                 console.error("Error saving user:", error.message);
                 res.status(500).json({ error: "Internal server error" });
+            }
+        });
+        app.get("/tasks", async (req, res) => {
+            try {
+                const tasks = await tasksCollection.find().toArray();
+                res.json(tasks);
+            } catch (error) {
+                res.status(500).json({ error: "Failed to fetch tasks" });
+            }
+        });
+
+        // Add a new task
+        app.post("/tasks", async (req, res) => {
+            try {
+                const newTask = req.body;
+                newTask.createdAt = new Date();
+                await tasksCollection.insertOne(newTask);
+                res.status(201).json(newTask);
+            } catch (error) {
+                res.status(500).json({ error: "Failed to add task" });
+            }
+        });
+
+        // Update a task
+        app.put("/tasks/:id", async (req, res) => {
+            try {
+                const { id } = req.params;
+                const updatedTask = req.body;
+                await tasksCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedTask });
+                res.json({ message: "Task updated successfully" });
+            } catch (error) {
+                res.status(500).json({ error: "Failed to update task" });
+            }
+        });
+
+        app.put("/tasks/:id", async (req, res) => {
+            const { id } = req.params;
+            const { category } = req.body;
+            await Task.findByIdAndUpdate(id, { category });
+            res.send({ success: true });
+        });
+
+        // Delete a task
+        app.delete("/tasks/:id", async (req, res) => {
+            try {
+                const { id } = req.params;
+                await tasksCollection.deleteOne({ _id: new ObjectId(id) });
+                res.json({ message: "Task deleted successfully" });
+            } catch (error) {
+                res.status(500).json({ error: "Failed to delete task" });
             }
         });
 
