@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const socketIo = require('socket.io');
 const port = process.env.PORT || 5000;
 const app = express();
 app.use(cors());
@@ -18,13 +19,40 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 });
-
+const server = app.listen(port, () => {
+    console.log(`Server is running on port: ${port}`);
+});
+const io = socketIo(server);
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
         // await client.connect();
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
+        io.on("connection", (socket) => {
+            console.log("New client connected");
+
+            socket.on("task-updated", async (task) => {
+                const { id, category } = task;
+                try {
+                    await tasksCollection.updateOne(
+                        { _id: new ObjectId(id) },
+                        { $set: { category } }
+                    );
+
+                    // Broadcast updated task to all clients
+                    io.emit("task-updated", task);
+                } catch (error) {
+                    console.error("Error updating task:", error.message);
+                }
+            });
+
+            socket.on("disconnect", () => {
+                console.log("Client disconnected");
+            });
+        });
+
+
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
         const database = client.db("taskmanagementapp");
         const usersCollection = database.collection("users");
@@ -110,13 +138,14 @@ async function run() {
     //     // // Ensures that the client will close when you finish/error
     //     // await client.close();
     // }
+
 }
 run().catch(console.dir);
 
 app.get('/', (req, res) => {
     res.send('SIMPLE CRUD IS RUNNING')
 })
-app.listen(port, () => {
-    console.log(`SIMPLE crud is running on port: ${port}`)
+// app.listen(port, () => {
+//     console.log(`SIMPLE crud is running on port: ${port}`)
 
-})
+// })
