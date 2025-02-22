@@ -81,36 +81,107 @@ async function run() {
         });
         app.get("/tasks", async (req, res) => {
             try {
-                const tasks = await tasksCollection.find().toArray();
-                res.json(tasks);
+                const { userId } = req.query;
+
+                if (!userId) {
+                    return res.status(400).json({ error: "User ID is required!" });
+                }
+
+                const userTasks = await tasksCollection.find({ userId }).toArray();
+                res.json(userTasks);
             } catch (error) {
                 res.status(500).json({ error: "Failed to fetch tasks" });
             }
         });
 
+
+        // app.get("/tasks", async (req, res) => {
+        //     try {
+        //         const { userId, email } = req.query; // Get userId and email from request query
+
+        //         if (!userId || !email) {
+        //             return res.status(400).json({ error: "User ID and email are required!" });
+        //         }
+
+        //         // Fetch tasks that belong to the logged-in user
+        //         const userTasks = await tasksCollection.find({ userId, email }).toArray();
+        //         res.json(userTasks);
+        //     } catch (error) {
+        //         res.status(500).json({ error: "Failed to fetch tasks" });
+        //     }
+        // });
+
         // Add a new task
+        // app.post("/tasks", async (req, res) => {
+        //     try {
+        //         const newTask = req.body;
+        //         newTask.createdAt = new Date();
+        //         await tasksCollection.insertOne(newTask);
+        //         res.status(201).json(newTask);
+        //     } catch (error) {
+        //         res.status(500).json({ error: "Failed to add task" });
+        //     }
+        // });
+
         app.post("/tasks", async (req, res) => {
             try {
-                const newTask = req.body;
-                newTask.createdAt = new Date();
-                await tasksCollection.insertOne(newTask);
-                res.status(201).json(newTask);
+                const { userId, userEmail, title, description, dueDate } = req.body;
+
+                if (!userId || !userEmail || !title) {
+                    return res.status(400).json({ error: "User ID, User Email, and Title are required!" });
+                }
+
+                // Count the current number of tasks in the "To-Do" category for this user
+                const taskCount = await tasksCollection.countDocuments({ userId, category: "To-Do" });
+
+                const newTask = {
+                    userId,
+                    userEmail,  // Save user email
+                    title,
+                    description: description || "",
+                    category: "To-Do",
+                    order: taskCount, // Assigns the next available order number
+                    dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+                    createdAt: new Date().toISOString(),
+                    logs: [`Task created at ${new Date().toISOString()}`]
+                };
+
+                const result = await tasksCollection.insertOne(newTask);
+                res.status(201).json({ ...newTask, _id: result.insertedId });
             } catch (error) {
                 res.status(500).json({ error: "Failed to add task" });
             }
         });
 
+
         // Update a task
         app.put("/tasks/:id", async (req, res) => {
             try {
                 const { id } = req.params;
-                const updatedTask = req.body;
-                await tasksCollection.updateOne({ _id: new ObjectId(id) }, { $set: updatedTask });
+                const { title, description, dueDate } = req.body;
+
+                const updateFields = {
+                    title,
+                    description,
+                    dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+                    $push: { logs: `Task updated at ${new Date().toISOString()}` }
+                };
+
+                const result = await tasksCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: updateFields }
+                );
+
+                if (result.modifiedCount === 0) {
+                    return res.status(404).json({ error: "Task not found or not updated" });
+                }
+
                 res.json({ message: "Task updated successfully" });
             } catch (error) {
                 res.status(500).json({ error: "Failed to update task" });
             }
         });
+
 
         app.put("/tasks/:id", async (req, res) => {
             const { id } = req.params;
